@@ -1,0 +1,144 @@
+Поток данных
+query
+  ↓
+Retriever
+  ↓
+docs
+  ↓
+IntentClassifier (query + docs)
+  ↓
+intents
+  ↓
+SessionMemory
+  ↓
+history
+  ↓
+ContextBuilder (docs + intents + history)
+  ↓
+prompt
+  ↓
+LLM
+  ↓
+response
+
+
+                +----------------------+
+                |     ChatService      |
+                +----------+-----------+
+                           |
+      +--------------------+--------------------+
+      |                    |                    |
++------------+     +---------------+     +----------------+
+| BaseLLM    |     | BaseRetriever |     | BaseIntentClf  |
++------------+     +---------------+     +----------------+
+      |                    |                    |
+      ↓                    ↓                    ↓
++------------+     +---------------+     +----------------------+
+| VLLM       |     | SimpleText    |     | LLMIntentClassifier  |
+| OpenAI     |     | Qdrant        |     | RuleBased            |
++------------+     +---------------+     +----------------------+
+
+                           |
+                           ↓
+                  +-------------------+
+                  |  ContextBuilder   |
+                  +-------------------+
+                           |
+                           ↓
+                  +-------------------+
+                  |  SessionMemory    |
+                  +-------------------+
+
+                           |
+                           ↓
+                  +-------------------+
+                  |      Logger       |
+                  +-------------------+
+                  
+Передача данных и их обработка до подачи в LLM
+User Query
+   ↓
+FaissRetriever
+   ↓
+ChunkPostProcessor  ← ты добавляешь сейчас
+   ↓
+IntentClassifier
+   ↓
+ContextBuilder
+   ↓
+LLM
+
+Структура проекта (сразу правильно)
+project/
+│
+├── core/                      # бизнес-логика (главное)
+│   ├── chat_service.py
+│   ├── context_builder.py
+│   ├── session_memory.py
+│
+├── llm/                       # модели
+│   ├── base.py
+│   ├── vllm.py
+│
+├── retrievers/                # поиск
+│   ├── base_retriever.py
+│   ├── simple.py
+│   ├── qdrant.py
+│
+├── intents/                   # интенты (опционально)
+│   ├── base_intents.py
+│   ├── llm_classifier.py
+│   ├── rules.py              # ← ДОБАВЬ (очень важно)
+│
+├── schemas/                   # структуры данных (советую)
+│   ├── message.py
+│   ├── response.py
+│
+├── logging/
+│   ├── logger.py 
+│
+├── config/
+│   └── config_project_chat_bot.yaml
+│
+├── factory/                   # ← ключевая штука
+│   └── builder.py
+│
+└── main.py
+
+1. User query
+2. Retriever → достаёт знания (docs)
+3. SessionMemory → достаёт историю (history)
+4. ContextBuilder → собирает всё вместе
+5. LLM → ОДИН раз генерирует ответ
+
+✔️ Нормальная схема
+запрос пользователя
+      ↓
+Retriever.search()
+      ↓
+docs (база знаний)
+      ↓
+SessionMemory.get_history()
+      ↓
+history (диалог)
+      ↓
+ContextBuilder.build()
+      ↓
+готовый контекст
+      ↓
+LLM.generate()
+      ↓
+ответ
+
+Как теперь работает система:
+1. Пользователь задаёт вопрос
+2. Retriever ищет информацию в базе (docs)
+3. IntentClassifier определяет намерения (query + история)
+4. Берём историю диалога (history)
+5. ContextBuilder собирает всё
+6. LLM генерирует ответ
+
+1. Пользователь → ChatService
+2. ChatService → FaissRetriever (находит релевантные документы)
+3. ChatService → Контекст (история + найденные документы)
+4. ChatService → LLM генерации ответа (формирует текст ответа)
